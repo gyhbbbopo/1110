@@ -3,7 +3,8 @@ name: Run tmux sessions
 
 on:
   schedule:
-    - cron: '6 8 * * *' # 
+    - cron: '6 8 * * *'  # 每 4 小时运行一次
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   run-sessions:
