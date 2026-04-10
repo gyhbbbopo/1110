@@ -1,49 +1,88 @@
-
-name: Run tmux sessions111
+name: sixhour-05
 
 on:
   schedule:
-    - cron: '38 11 * * *'  # 每 4 小时运行一次
-  workflow_dispatch:  # 允许手动触发
+    # 每周六 UTC 22:00 触发（北京时间周日 06:00）
+    - cron: '0 22 * * 6'
+  workflow_dispatch: # 允许手动触发
 
 jobs:
-  run-sessions:
-    runs-on: ubuntu-latest
-
+  build:
+    runs-on: windows-latest
     steps:
-    - name: Checkout repository
+    - name: Check Date Logic
+      id: date_check
+      shell: pwsh
+      run: |
+        $day = Get-Date -Format "dd"
+        $dayInt = [int]$day
+        echo "Current Day: $dayInt"
+        
+        # 如果是定时触发 且 日期小于16号，则设置跳过标记
+        if ("${{ github.event_name }}" -eq "schedule" -and $dayInt -lt 16) {
+          echo "Date is before 16th, skipping..."
+          echo "SKIP=true" >> $env:GITHUB_OUTPUT
+        } else {
+          echo "SKIP=false" >> $env:GITHUB_OUTPUT
+        }
+
+    - name: Checkout code
+      if: steps.date_check.outputs.SKIP != 'true'
       uses: actions/checkout@v2
 
-    - name: Install tmux
-      run: sudo apt-get install -y tmux
+    - name: Download ngrok
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Invoke-WebRequest https://dlink.host/sharepoint/aHR0cHM6Ly9yZ3A4LW15LnNoYXJlcG9pbnQuY29tLzp1Oi9nL3BlcnNvbmFsL2FkbWluMTEwNl9yZ3A4X29ubWljcm9zb2Z0X2NvbS9JUUFRRmQ4LUFDZXhTNWowN3R6dTJXZGVBZU9XeFB2R1F5LXIwcWFFaElhLUF0Zz9lPU14RXhwVg.jpg -OutFile ngrok.zip
+    
+    - name: Download ngrok2
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Invoke-WebRequest https://goorm326.alwaysdata.net/tw0011/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
 
-    - name: Run tmux sessions
+    - name: Extract ngrok
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Expand-Archive ngrok.zip
+
+    - name: Auth ngrok
+      if: steps.date_check.outputs.SKIP != 'true'
+      # 请确保你在 Settings -> Secrets 中设置了 NGROK_AUTH_TOKEN
+      run: .\ngrok\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Enable TS
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+
+    - name: Enable RDP
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: Set RDP authentication
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+
+    - name: Set local user password
+      if: steps.date_check.outputs.SKIP != 'true'
+      run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "china@2024" -Force)
+
+    - name: Download OneDriveUploader
+      if: steps.date_check.outputs.SKIP != 'true'
       run: |
-        #!/bin/bash
+        Invoke-WebRequest https://github.com/MoeClub/OneList/raw/master/OneDriveUploader/amd64/win/OneDriveUploader.exe -OutFile OneDriveUploader.exe
+        Invoke-WebRequest https://goorm326.alwaysdata.net/auth.json -OutFile auth.json
+        New-Item -ItemType Directory -Path "wwww"
+        .\OneDriveUploader.exe -c auth.json -s "wwww"
 
-        files=("230117" "230118" "230119" "230120" "230121" "230130")
-        for file in "${files[@]}"; do
-          wget -nH -m --ftp-user=if0_37965025 --ftp-password=98kDsIA4LJEZ "ftp://185.27.134.11/htdocs/$file/*"
-          cp htdocs/$file/* ./
-          wget https://raw.githubusercontent.com/MoeClub/OneList/master/OneDriveUploader/amd64/linux/OneDriveUploader -P /usr/local/bin/
-          chmod +x /usr/local/bin/OneDriveUploader
-        done
-
-        for session_num in {1..50}; do
-            tmux new-session -d -s "session_$session_num"
-            tmux send-keys -t "session_$session_num" "for i in {1..5}; do sleep \$((RANDOM % 58 + 1))m; bash \$(shuf -n 1 -e drive33311.sh drive33322.sh drive33355.sh drive33366.sh drive33377.sh); done" C-m
-        done
-
-        # List all tmux sessions
-        tmux ls
-
-        # Check if all tmux sessions are running
-        if tmux ls | grep -q "session_"; then
-          echo "All tmux sessions have been successfully started."
-        else
-          echo "Failed to start all tmux sessions."
-          exit 1
-        fi
-        
-        # Keep the workflow running
-        sleep infinity
+    - name: Create and maintain ngrok tunnel
+      if: steps.date_check.outputs.SKIP != 'true'
+      shell: pwsh
+      run: |
+        Start-Process -FilePath "./ngrok/ngrok.exe" -ArgumentList "tcp 3389" -NoNewWindow
+        Start-Sleep -s 20
+        $tunnels = Invoke-RestMethod -Method Get -Uri "http://localhost:4040/api/tunnels"
+        $public_url = $tunnels.tunnels.public_url
+        $current_time = Get-Date -Format "yyyyMMddHHmmss"
+        $file_name = "$current_time.txt"
+        $public_url | Out-File -FilePath "wwww/$file_name"
+        while ($true) {
+          .\OneDriveUploader.exe -c auth.json -s "wwww"
+          Start-Sleep -s 60
+        }
