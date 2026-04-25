@@ -9,17 +9,10 @@ jobs:
     timeout-minutes: 360   # 最多 6 小时
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Install tools
+    - name: Check Docker
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          docker.io \
-          curl \
-          jq \
-          openssh-client
+        docker --version
+        docker info
 
     - name: Start Docker SSH container
       run: |
@@ -30,9 +23,14 @@ jobs:
           -p 2222:22 \
           ghcr.io/vevc/ubuntu:25.7.14
 
-        echo "Waiting SSH in container..."
+        echo "Waiting for container..."
         sleep 10
         docker ps
+
+    - name: Install tools (no Docker)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl jq openssh-client
 
     - name: Download ngrok
       run: |
@@ -51,7 +49,7 @@ jobs:
         sleep 15
 
         curl -s http://127.0.0.1:4040/api/tunnels \
-                                                   | jq -r '.tunnels[0].public_url' \
+          | jq -r '.tunnels[0].public_url' \
           > public_url.txt
 
         echo "======================================"
